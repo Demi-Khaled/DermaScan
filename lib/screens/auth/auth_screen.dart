@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/primary_button.dart';
 import '../../routing/app_router.dart';
+import 'package:provider/provider.dart';
+import '../../services/auth_service.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -69,16 +71,59 @@ class _AuthScreenState extends State<AuthScreen>
     if (!formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    Navigator.pushReplacementNamed(context, AppRoutes.home);
+    
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      if (_tabIndex == 0) {
+        await authService.login(_loginEmailCtrl.text.trim(), _loginPassCtrl.text);
+      } else {
+        await authService.register(
+          _signUpNameCtrl.text.trim(),
+          _signUpEmailCtrl.text.trim(),
+          _signUpPassCtrl.text,
+        );
+      }
+      
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final success = await authService.signInWithGoogle();
+      
+      if (success && mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -118,13 +163,14 @@ class _AuthScreenState extends State<AuthScreen>
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.35),
+                color: AppColors.primary.withValues(alpha: 0.35),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: const Icon(Icons.biotech_rounded, color: Colors.white, size: 42),
+          child:
+              const Icon(Icons.biotech_rounded, color: Colors.white, size: 42),
         ),
         const SizedBox(height: 14),
         ShaderMask(
@@ -143,7 +189,9 @@ class _AuthScreenState extends State<AuthScreen>
         const SizedBox(height: 4),
         Text(
           'AI Skin Monitoring',
-          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).brightness == Brightness.dark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+          ),
         ),
       ],
     );
@@ -153,7 +201,7 @@ class _AuthScreenState extends State<AuthScreen>
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.divider,
+        color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -175,12 +223,12 @@ class _AuthScreenState extends State<AuthScreen>
           curve: Curves.easeInOut,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
+            color: isSelected ? Theme.of(context).cardColor : Colors.transparent,
             borderRadius: BorderRadius.circular(11),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -192,7 +240,7 @@ class _AuthScreenState extends State<AuthScreen>
             textAlign: TextAlign.center,
             style: TextStyle(
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? AppColors.primary : AppColors.textMuted,
+              color: isSelected ? AppColors.primary : AppColors.getAdaptiveTextMuted(context),
               fontSize: 15,
             ),
           ),
@@ -230,7 +278,7 @@ class _AuthScreenState extends State<AuthScreen>
                 _loginPassVisible
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
-                color: AppColors.textMuted,
+                color: AppColors.getAdaptiveTextMuted(context),
                 size: 20,
               ),
               onPressed: () =>
@@ -252,14 +300,14 @@ class _AuthScreenState extends State<AuthScreen>
               ),
               Text(
                 'Remember me',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textPrimary,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const Spacer(),
               TextButton(
-                onPressed: () => _showStub('Forgot password coming soon!'),
-                child: Text(
+                onPressed: () => Navigator.pushNamed(context, AppRoutes.forgotPassword),
+                child: const Text(
                   'Forgot password?',
                   style: TextStyle(
                     color: AppColors.accent,
@@ -322,7 +370,7 @@ class _AuthScreenState extends State<AuthScreen>
                 _signUpPassVisible
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
-                color: AppColors.textMuted,
+                color: AppColors.getAdaptiveTextMuted(context),
                 size: 20,
               ),
               onPressed: () =>
@@ -346,11 +394,11 @@ class _AuthScreenState extends State<AuthScreen>
                 _signUpConfirmVisible
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
-                color: AppColors.textMuted,
+                color: AppColors.getAdaptiveTextMuted(context),
                 size: 20,
               ),
-              onPressed: () =>
-                  setState(() => _signUpConfirmVisible = !_signUpConfirmVisible),
+              onPressed: () => setState(
+                  () => _signUpConfirmVisible = !_signUpConfirmVisible),
             ),
             validator: (v) {
               if (v != _signUpPassCtrl.text) return 'Passwords do not match';
@@ -360,7 +408,9 @@ class _AuthScreenState extends State<AuthScreen>
           const SizedBox(height: 16),
           Text(
             'By creating an account you agree to our Terms of Service and Privacy Policy.',
-            style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).brightness == Brightness.dark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
@@ -390,11 +440,13 @@ class _AuthScreenState extends State<AuthScreen>
       validator: validator,
       keyboardType: keyboardType,
       obscureText: obscure,
-      style: AppTextStyles.body.copyWith(color: AppColors.textPrimary),
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: AppColors.textMuted, size: 20),
+        prefixIcon: Icon(icon, color: AppColors.getAdaptiveTextMuted(context), size: 20),
         suffixIcon: suffix,
       ),
     );
@@ -405,14 +457,16 @@ class _AuthScreenState extends State<AuthScreen>
       width: double.infinity,
       height: 52,
       child: OutlinedButton.icon(
-        onPressed: () => _showStub('Google sign-in coming soon!'),
-        icon: const Icon(Icons.g_mobiledata_rounded, size: 26),
+        onPressed: _isLoading ? null : _handleGoogleSignIn,
+        icon: _isLoading 
+          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.g_mobiledata_rounded, size: 26),
         label: const Text(
           'Continue with Google',
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
+          foregroundColor: AppColors.getAdaptiveTextPrimary(context),
           side: const BorderSide(color: AppColors.border, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -426,9 +480,9 @@ class _AuthScreenState extends State<AuthScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
+        color: context.watch<AuthService>().isDarkMode ? const Color(0xFF1E1B16) : const Color(0xFFFFF7ED),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFED7AA)),
+        border: Border.all(color: context.watch<AuthService>().isDarkMode ? const Color(0xFF45300B) : const Color(0xFFFED7AA)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,7 +497,7 @@ class _AuthScreenState extends State<AuthScreen>
             child: Text(
               'This app does not replace medical diagnosis. Always consult a licensed dermatologist.',
               style: AppTextStyles.small.copyWith(
-                color: const Color(0xFF92400E),
+                color: context.watch<AuthService>().isDarkMode ? const Color(0xFFFFB866) : const Color(0xFF92400E),
                 height: 1.5,
               ),
             ),
@@ -462,19 +516,19 @@ class _AuthScreenState extends State<AuthScreen>
           child: Text(
             'Privacy Policy',
             style: TextStyle(
-              color: AppColors.textMuted,
+              color: AppColors.getAdaptiveTextMuted(context),
               fontSize: 12,
               decoration: TextDecoration.underline,
             ),
           ),
         ),
-        Text('·', style: TextStyle(color: AppColors.textMuted)),
+        Text('·', style: TextStyle(color: AppColors.getAdaptiveTextMuted(context))),
         TextButton(
           onPressed: () => _showStub('Terms of Service'),
           child: Text(
             'Terms of Service',
             style: TextStyle(
-              color: AppColors.textMuted,
+              color: AppColors.getAdaptiveTextMuted(context),
               fontSize: 12,
               decoration: TextDecoration.underline,
             ),

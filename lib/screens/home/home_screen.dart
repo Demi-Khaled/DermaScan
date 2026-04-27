@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import '../../models/lesion.dart';
 import '../../widgets/risk_badge.dart';
 import '../../routing/app_router.dart';
+import 'package:provider/provider.dart';
+import '../../services/auth_service.dart';
+import '../../services/sync_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,32 +19,66 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _navIndex = 0;
-
-  List<Lesion> get _lesions => LesionStore.lesions.toList();
-
-  DateTime? get _lastScan {
-    if (_lesions.isEmpty) return null;
-    return _lesions
-        .map((l) => l.lastScan)
-        .reduce((a, b) => a.isAfter(b) ? a : b);
-  }
-
-  bool get _hasOverdue => _lesions.any((l) => l.isOverdue);
+  bool _isFetchingFromServer = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = context.read<AuthService>();
+      if (auth.isAuthenticated) {
+        // Fetch latest data from server on every home screen visit
+        setState(() => _isFetchingFromServer = true);
+        await SyncService.fetchHistoryFromServer(token: auth.token!);
+        if (mounted) setState(() => _isFetchingFromServer = false);
+        // Also sync any pending offline scans
+        SyncService.syncPendingScans(token: auth.token);
+      }
+    });
+  }
+  
+  @override
   Widget build(BuildContext context) {
+    final lesions = context.watch<LesionStore>().lesions;
+    DateTime? lastScan;
+    bool hasOverdue = false;
+
+    if (lesions.isNotEmpty) {
+      lastScan = lesions
+          .map((l) => l.lastScan)
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+      hasOverdue = lesions.any((l) => l.isOverdue);
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: IndexedStack(
-        index: _navIndex,
-        children: [_buildHomeTab(), _buildProfilePlaceholder()],
-      ),
+      body: _isFetchingFromServer && lesions.isEmpty
+          ? _buildLoadingState()
+          : _buildHomeTab(lesions, lastScan, hasOverdue),
       bottomNavigationBar: _buildBottomNav(),
-      floatingActionButton: _navIndex == 0 ? _buildFab() : null,
+      floatingActionButton: _buildFab(),
     );
   }
 
-  Widget _buildHomeTab() {
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(
+            'Loading your scans...',
+            style: TextStyle(
+              color: AppColors.getAdaptiveTextSecondary(context),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeTab(List<Lesion> lesions, DateTime? lastScan, bool hasOverdue) {
     return CustomScrollView(
       slivers: [
         _buildHeader(),
@@ -49,24 +88,24 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_lesions.isNotEmpty) ...[
-                  _buildSummaryCard(),
+                if (lesions.isNotEmpty) ...[
+                  _buildSummaryCard(lesions, lastScan, hasOverdue),
                   const SizedBox(height: 24),
-                  _buildSectionTitle('Your Lesions', '${_lesions.length}'),
+                  _buildSectionTitle('Your Lesions', '${lesions.length}'),
                 ],
               ],
             ),
           ),
         ),
-        if (_lesions.isEmpty)
+        if (lesions.isEmpty)
           SliverFillRemaining(child: _buildEmptyState())
         else
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildLesionCard(_lesions[index]),
-                childCount: _lesions.length,
+                (context, index) => _buildLesionCard(lesions[index]),
+                childCount: lesions.length,
               ),
             ),
           ),
@@ -78,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return SliverAppBar(
       expandedHeight: 140,
       pinned: true,
+      automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: const BoxDecoration(gradient: AppColors.headerGradient),
@@ -94,41 +134,28 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         const SizedBox(height: 16),
                         Text(
-                          'Hello, Ahmed 👋',
-                          style: AppTextStyles.h2.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          'Hello, ${context.select<AuthService, String>((auth) => auth.userName).split(' ').first} 👋',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        Text(
+                        const Text(
                           'Monitor your skin health daily',
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white.withOpacity(0.80),
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () =>
-                        Navigator.pushNamed(context, AppRoutes.profile),
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.20),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.40),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        color: Colors.white,
-                        size: 26,
-                      ),
                     ),
                   ),
                 ],
@@ -141,18 +168,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSummaryCard() {
-    final lastScanDate = _lastScan;
+  Widget _buildSummaryCard(List<Lesion> lesions, DateTime? lastScan, bool hasOverdue) {
     final df = DateFormat('MMM d, yyyy');
+    final isDarkMode = context.select<AuthService, bool>((auth) => auth.isDarkMode);
+    
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: AppColors.cardGradient,
+        gradient: isDarkMode
+            ? AppColors.darkCardGradient
+            : AppColors.cardGradient,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.06),
+            color: AppColors.primary.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -163,7 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: _statPill(
               icon: Icons.healing_rounded,
-              value: '${_lesions.length}',
+              value: '${lesions.length}',
               label: 'Lesions',
               color: AppColors.accent,
             ),
@@ -177,12 +207,12 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: _statPill(
               icon: Icons.calendar_today_rounded,
-              value: lastScanDate != null ? df.format(lastScanDate) : '—',
+              value: lastScan != null ? df.format(lastScan) : '—',
               label: 'Last Scan',
               color: AppColors.secondary,
             ),
           ),
-          if (_hasOverdue) ...[
+          if (hasOverdue) ...[
             Container(
               width: 1,
               height: 50,
@@ -195,11 +225,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: AppColors.riskMediumBg,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Column(
+              child: const Column(
                 children: [
                   Icon(Icons.schedule_rounded,
                       color: AppColors.riskMedium, size: 18),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     'Overdue',
                     style: TextStyle(
@@ -230,18 +260,27 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(icon, color: color, size: 16),
             const SizedBox(width: 6),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: color,
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
         const SizedBox(height: 2),
-        Text(label, style: AppTextStyles.small),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       ],
     );
   }
@@ -249,17 +288,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSectionTitle(String title, String count) {
     return Row(
       children: [
-        Text(title, style: AppTextStyles.h3),
+        Text(title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: AppColors.primaryLight.withOpacity(0.12),
+            color: AppColors.primaryLight.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             count,
-            style: TextStyle(
+            style: const TextStyle(
               color: AppColors.primary,
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -282,12 +321,12 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -300,15 +339,25 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: Theme.of(context).scaffoldBackgroundColor,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.divider),
               ),
-              child: Icon(
-                Icons.image_search_rounded,
-                color: AppColors.textMuted,
-                size: 28,
-              ),
+              clipBehavior: Clip.antiAlias,
+              child: (lesion.imagePath != null && lesion.imagePath != 'demo_lesion.jpg')
+                  ? (lesion.imagePath!.startsWith('http')
+                      ? CachedNetworkImage(
+                          imageUrl: lesion.imagePath!,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(color: Colors.grey[300]),
+                          errorWidget: (context, url, error) => const Icon(Icons.error),
+                        )
+                      : Image.file(File(lesion.imagePath!), fit: BoxFit.cover))
+                  : Icon(
+                      Icons.image_search_rounded,
+                      color: AppColors.getAdaptiveTextMuted(context),
+                      size: 28,
+                     ),
             ),
             const SizedBox(width: 14),
             // Info
@@ -316,19 +365,33 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(lesion.name, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
+                  Text(lesion.name,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyLarge
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 3),
                   Row(
                     children: [
                       Icon(Icons.location_on_outlined,
-                          size: 13, color: AppColors.textMuted),
+                          size: 13,
+                          color: AppColors.getAdaptiveTextMuted(context)),
                       const SizedBox(width: 3),
-                      Text(lesion.bodyLocation, style: AppTextStyles.small),
+                      Expanded(
+                        child: Text(lesion.bodyLocation,
+                            style: Theme.of(context).textTheme.labelSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ),
                       const SizedBox(width: 10),
                       Icon(Icons.history_rounded,
-                          size: 13, color: AppColors.textMuted),
+                          size: 13,
+                          color: AppColors.getAdaptiveTextMuted(context)),
                       const SizedBox(width: 3),
-                      Text(df.format(lesion.lastScan), style: AppTextStyles.small),
+                      Text(df.format(lesion.lastScan),
+                          style: Theme.of(context).textTheme.labelSmall),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -336,8 +399,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                color: AppColors.textMuted, size: 22),
+            Icon(Icons.chevron_right_rounded,
+                color: AppColors.getAdaptiveTextMuted(context), size: 22),
           ],
         ),
       ),
@@ -355,33 +418,40 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                gradient: AppColors.cardGradient,
+                gradient: context.watch<AuthService>().isDarkMode
+                    ? AppColors.darkCardGradient
+                    : AppColors.cardGradient,
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.divider, width: 2),
               ),
               child: Icon(
                 Icons.document_scanner_rounded,
                 size: 48,
-                color: AppColors.primary.withOpacity(0.40),
+                color: AppColors.primary.withValues(alpha: 0.40),
               ),
             ),
             const SizedBox(height: 24),
             Text(
               'No lesions yet',
-              style: AppTextStyles.h3.copyWith(color: AppColors.textSecondary),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? AppColors.textSecondaryDark
+                        : AppColors.textSecondary,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
               'Start scanning to track your skin health and catch changes early.',
-              style: AppTextStyles.caption,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.getAdaptiveTextSecondary(context)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
             SizedBox(
               width: 200,
               child: ElevatedButton.icon(
-                onPressed: () =>
-                    Navigator.pushNamed(context, AppRoutes.camera),
+                onPressed: () => Navigator.pushNamed(context, AppRoutes.camera),
                 icon: const Icon(Icons.camera_alt_rounded),
                 label: const Text('Start First Scan'),
                 style: ElevatedButton.styleFrom(
@@ -400,14 +470,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProfilePlaceholder() {
-    return const ProfileTab();
-  }
-
   Widget _buildBottomNav() {
     return BottomNavigationBar(
       currentIndex: _navIndex,
-      onTap: (i) => setState(() => _navIndex = i),
+      onTap: (i) {
+        if (i == 1) {
+          Navigator.pushNamed(context, AppRoutes.profile);
+        } else {
+          setState(() => _navIndex = i);
+        }
+      },
       items: const [
         BottomNavigationBarItem(
           icon: Icon(Icons.home_rounded),
@@ -432,39 +504,8 @@ class _HomeScreenState extends State<HomeScreen> {
       label: const Text(
         'New Scan',
         style: TextStyle(fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
-// Inline profile tab used within the bottom nav
-class ProfileTab extends StatelessWidget {
-  const ProfileTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.person_rounded, size: 64, color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text('Profile', style: AppTextStyles.h2),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.pushNamed(context, AppRoutes.profile),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(180, 48),
-              ),
-              child: const Text('Open Profile'),
-            ),
-          ],
-        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

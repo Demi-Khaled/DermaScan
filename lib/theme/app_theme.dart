@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary palette
+  // Primary palette (remains mostly same, but can be adjusted for dark mode if needed)
   static const Color primary = Color(0xFF1E3A8A);
   static const Color primaryLight = Color(0xFF2563EB);
   static const Color secondary = Color(0xFF14B8A6);
@@ -12,19 +12,25 @@ class AppColors {
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFEF4444);
 
-  // Background / surface
+  // Light Mode Colors
   static const Color background = Color(0xFFF0F4FF);
   static const Color card = Color(0xFFFFFFFF);
   static const Color cardDark = Color(0xFFF8FAFC);
-
-  // Text
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF475569);
   static const Color textMuted = Color(0xFF94A3B8);
-
-  // Dividers & borders
   static const Color divider = Color(0xFFE2E8F0);
   static const Color border = Color(0xFFCBD5E1);
+
+  // Dark Mode Colors
+  static const Color backgroundDark = Color(0xFF0F172A);
+  static const Color cardDarkBody = Color(0xFF1E293B);
+  static const Color cardDarkHeader = Color(0xFF0F172A);
+  static const Color textPrimaryDark = Color(0xFFF8FAFC);
+  static const Color textSecondaryDark = Color(0xFF94A3B8);
+  static const Color textMutedDark = Color(0xFF64748B);
+  static const Color dividerDark = Color(0xFF334155);
+  static const Color borderDark = Color(0xFF475569);
 
   // Risk colors
   static const Color riskLow = Color(0xFF10B981);
@@ -52,91 +58,131 @@ class AppColors {
     end: Alignment.bottomRight,
     colors: [Color(0xFFEFF6FF), Color(0xFFF0FDFA)],
   );
+  
+  static const LinearGradient darkCardGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+  );
+
+  static Color getAdaptiveTextPrimary(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? textPrimaryDark : textPrimary;
+
+  static Color getAdaptiveTextSecondary(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? textSecondaryDark : textSecondary;
+
+  static Color getAdaptiveTextMuted(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? textMutedDark : textMuted;
 }
 
 class AppTextStyles {
-  static const TextStyle h1 = TextStyle(
+  static TextStyle getH1(bool isDark) => TextStyle(
     fontSize: 28,
     fontWeight: FontWeight.bold,
-    color: AppColors.textPrimary,
+    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
     letterSpacing: -0.5,
   );
 
-  static const TextStyle h2 = TextStyle(
+  static TextStyle getH2(bool isDark) => TextStyle(
     fontSize: 22,
     fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
+    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
     letterSpacing: -0.3,
   );
 
-  static const TextStyle h3 = TextStyle(
+  static TextStyle getH3(bool isDark) => TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w500,
-    color: AppColors.textPrimary,
+    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
   );
 
-  static const TextStyle body = TextStyle(
+  static TextStyle getBody(bool isDark) => TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.normal,
-    color: AppColors.textPrimary,
+    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
     height: 1.5,
   );
 
-  static const TextStyle caption = TextStyle(
+  static TextStyle getCaption(bool isDark) => TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.normal,
-    color: AppColors.textSecondary,
+    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
     height: 1.4,
   );
 
-  static const TextStyle small = TextStyle(
+  static TextStyle getSmall(bool isDark) => TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.normal,
-    color: AppColors.textMuted,
+    color: isDark ? AppColors.textMutedDark : AppColors.textMuted,
   );
+
+  // Backward compatibility static getters (using light mode by default or global context if possible, 
+  // but better to use the methods above in build methods)
+  static const TextStyle h1 = TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5);
+  static const TextStyle h2 = TextStyle(fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.3);
+  static const TextStyle h3 = TextStyle(fontSize: 18, fontWeight: FontWeight.w500);
+  static const TextStyle body = TextStyle(fontSize: 16, fontWeight: FontWeight.normal, height: 1.5);
+  static const TextStyle caption = TextStyle(fontSize: 14, fontWeight: FontWeight.normal, height: 1.4);
+  static const TextStyle small = TextStyle(fontSize: 12, fontWeight: FontWeight.normal);
 }
 
-ThemeData buildAppTheme() {
+ThemeData buildLightTheme() {
+  return _buildTheme(isDark: false);
+}
+
+ThemeData buildDarkTheme() {
+  return _buildTheme(isDark: true);
+}
+
+ThemeData _buildTheme({required bool isDark}) {
+  final bgColor = isDark ? AppColors.backgroundDark : AppColors.background;
+  final cardColor = isDark ? AppColors.cardDarkBody : AppColors.card;
+  final textColor = isDark ? AppColors.textPrimaryDark : AppColors.textPrimary;
+  final dividerColor = isDark ? AppColors.dividerDark : AppColors.divider;
+  final borderColor = isDark ? AppColors.borderDark : AppColors.border;
+
   return ThemeData(
     useMaterial3: true,
     fontFamily: 'Roboto',
+    brightness: isDark ? Brightness.dark : Brightness.light,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
       primary: AppColors.primary,
       secondary: AppColors.secondary,
-      surface: AppColors.card,
-      background: AppColors.background,
+      surface: cardColor,
+      onSurface: textColor,
+      brightness: isDark ? Brightness.dark : Brightness.light,
     ),
-    scaffoldBackgroundColor: AppColors.background,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+    scaffoldBackgroundColor: bgColor,
+    appBarTheme: AppBarTheme(
+      backgroundColor: isDark ? AppColors.backgroundDark : Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      iconTheme: IconThemeData(color: Colors.white),
-      titleTextStyle: TextStyle(
+      iconTheme: const IconThemeData(color: Colors.white),
+      titleTextStyle: const TextStyle(
         color: Colors.white,
         fontSize: 18,
         fontWeight: FontWeight.w600,
       ),
     ),
-    cardTheme: CardTheme(
-      color: AppColors.card,
+    cardTheme: CardThemeData(
+      color: cardColor,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.divider, width: 1),
+        side: BorderSide(color: dividerColor, width: 1),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.cardDark,
+      fillColor: isDark ? AppColors.backgroundDark : AppColors.cardDark,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: borderColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: borderColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -147,8 +193,8 @@ ThemeData buildAppTheme() {
         borderSide: const BorderSide(color: AppColors.danger),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      labelStyle: AppTextStyles.caption,
-      hintStyle: AppTextStyles.small.copyWith(color: AppColors.textMuted),
+      labelStyle: AppTextStyles.getCaption(isDark),
+      hintStyle: AppTextStyles.getSmall(isDark),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -159,20 +205,30 @@ ThemeData buildAppTheme() {
         elevation: 0,
       ),
     ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: Colors.white,
-      selectedItemColor: AppColors.primary,
-      unselectedItemColor: AppColors.textMuted,
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: isDark ? AppColors.cardDarkBody : Colors.white,
+      selectedItemColor: AppColors.primaryLight,
+      unselectedItemColor: isDark ? AppColors.textMutedDark : AppColors.textMuted,
       elevation: 8,
       type: BottomNavigationBarType.fixed,
     ),
-    dividerColor: AppColors.divider,
-    checkboxTheme: CheckboxThemeData(
-      fillColor: MaterialStateProperty.resolveWith((states) {
-        if (states.contains(MaterialState.selected)) return AppColors.primary;
-        return Colors.transparent;
-      }),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    dividerColor: dividerColor,
+    listTileTheme: ListTileThemeData(
+      iconColor: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+      titleTextStyle: AppTextStyles.getBody(isDark),
+      subtitleTextStyle: AppTextStyles.getCaption(isDark),
+    ),
+    textTheme: TextTheme(
+      headlineLarge: AppTextStyles.getH1(isDark),
+      headlineMedium: AppTextStyles.getH2(isDark),
+      titleLarge: AppTextStyles.getH3(isDark),
+      bodyLarge: AppTextStyles.getBody(isDark),
+      bodyMedium: AppTextStyles.getBody(isDark).copyWith(fontSize: 15),
+      bodySmall: AppTextStyles.getCaption(isDark),
+      labelSmall: AppTextStyles.getSmall(isDark),
     ),
   );
 }
+
+// Keep the old name for compatibility during migration if needed
+ThemeData buildAppTheme() => buildLightTheme();

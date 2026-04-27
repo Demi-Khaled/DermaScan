@@ -6,9 +6,12 @@ import '../../theme/app_theme.dart';
 import '../../services/ai_service.dart';
 import '../../routing/app_router.dart';
 import '../../widgets/primary_button.dart';
+import '../../services/sync_service.dart';
+import '../../services/auth_service.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({super.key});
+  final String? existingLesionId;
+  const CameraScreen({super.key, this.existingLesionId});
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -76,10 +79,14 @@ class _CameraScreenState extends State<CameraScreen>
 
   Future<void> _analyze() async {
     if (_capturedFile == null) return;
+    final auth = context.read<AuthService>();
     final aiService = context.read<AiService>();
     setState(() => _isAnalyzing = true);
     try {
-      final result = await aiService.analyzeLesion(File(_capturedFile!.path));
+      final result = await aiService.analyzeLesion(
+        File(_capturedFile!.path),
+        token: auth.token,
+      );
       if (!mounted) return;
       Navigator.pushReplacementNamed(
         context,
@@ -87,19 +94,70 @@ class _CameraScreenState extends State<CameraScreen>
         arguments: {
           'result': result,
           'imagePath': _capturedFile!.path,
+          'existingLesionId': widget.existingLesionId,
         },
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Analysis failed: ${e.toString()}'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+      
+      // Offer to queue for offline sync
+      _showOfflineOption();
     } finally {
       if (mounted) setState(() => _isAnalyzing = false);
     }
+  }
+
+  void _showOfflineOption() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: AppColors.warning, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'Analysis Offline',
+              style: AppTextStyles.h2,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'We couldn\'t connect to our AI server. Would you like to save this photo and analyze it automatically once you\'re back online?',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.caption,
+            ),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              label: 'Save & Sync Later',
+              onPressed: () async {
+                await SyncService.queueScan(_capturedFile!.path);
+                if (!mounted) return;
+                Navigator.pop(context); // close sheet
+                Navigator.pop(context); // back to home
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Photo saved! We\'ll analyze it when you have internet.'),
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              },
+              icon: Icons.sync_rounded,
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Try Again Later', style: TextStyle(color: AppColors.textMuted)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -124,7 +182,7 @@ class _CameraScreenState extends State<CameraScreen>
                   const Icon(Icons.no_photography_rounded,
                       color: Colors.white54, size: 64),
                   const SizedBox(height: 12),
-                  Text(
+                  const Text(
                     'Camera unavailable\n(running in emulator?)',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white60, fontSize: 15),
@@ -196,7 +254,7 @@ class _CameraScreenState extends State<CameraScreen>
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   margin: const EdgeInsets.symmetric(horizontal: 40),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.55),
+                    color: Colors.black.withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -209,7 +267,7 @@ class _CameraScreenState extends State<CameraScreen>
                         child: Text(
                           'Use good lighting and hold steady',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.90),
+                            color: Colors.white.withValues(alpha: 0.90),
                             fontSize: 13,
                           ),
                         ),
@@ -235,14 +293,12 @@ class _CameraScreenState extends State<CameraScreen>
                     shape: BoxShape.circle,
                     color: Colors.white,
                     border: Border.all(
-                      color: _isInitialized
-                          ? Colors.white
-                          : Colors.white38,
+                      color: _isInitialized ? Colors.white : Colors.white38,
                       width: 4,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.30),
+                          color: Colors.black.withValues(alpha: 0.60),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -252,9 +308,7 @@ class _CameraScreenState extends State<CameraScreen>
                     margin: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _isInitialized
-                          ? AppColors.primary
-                          : Colors.grey,
+                      color: _isInitialized ? AppColors.primary : Colors.grey,
                     ),
                   ),
                 ),
@@ -321,7 +375,7 @@ class _CameraScreenState extends State<CameraScreen>
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    Colors.black.withOpacity(0.85),
+                    Colors.black.withValues(alpha: 0.85),
                     Colors.transparent,
                   ],
                 ),
@@ -373,7 +427,7 @@ class _CameraScreenState extends State<CameraScreen>
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.45),
+          color: Colors.black.withValues(alpha: 0.45),
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white24),
         ),

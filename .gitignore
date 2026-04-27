@@ -80,3 +80,6 @@ build/
 # Symlinks to Flutter SDK (rarely needed)
 .flutter-plugins
 .flutter-plugins-dependencies
+# Backend related
+node_modules/
+.env

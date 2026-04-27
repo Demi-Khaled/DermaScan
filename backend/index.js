@@ -27,6 +27,11 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK' });
 });
 
+// Root endpoint
+app.get('/', (req, res) => {
+    res.send('DermaScannAI API is running! Use the /api endpoints to interact with the backend.');
+});
+
 app.listen(port, () => {
   console.log(`DermaScannAI Node.js Backend listening at http://localhost:${port}`);
 });

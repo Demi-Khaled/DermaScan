@@ -31,12 +31,10 @@ const analyzeImage = async (req, res) => {
     // Pass back the image server URL so the frontend can save it to a Lesion later
     const responsePayload = {
         ...analysisResult,
-        imagePath: req.file ? `/uploads/${req.file.filename}` : null
+        imagePath: req.file ? req.file.path : null
     };
 
-    setTimeout(() => {
-        res.status(200).json(responsePayload);
-    }, 2000); // simulate the AI delay
+    res.status(200).json(responsePayload);
 
   } catch (error) {
     res.status(500).json({ message: error.message });

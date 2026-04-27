@@ -1,0 +1,21 @@
+1. AI Analysis Engine (Active)
+Camera Integration: Taking high-quality photos of skin issues within the app.
+AI Diagnosis: Sending the image to an AI model (like TensorFlow or a Cloud API) to detect skin conditions.
+Result Display: Showing the user the analysis result with confidence percentages.
+
+2. Image Management (Active)
+Cloud Storage: Uploading the scan photos to a service like AWS S3 or Cloudinary.
+Scan History: A timeline where users can see their previous scans and track if a spot is changing over time.
+
+3. Advanced User Profile (Active)
+Profile Pictures: Allowing users to upload a custom avatar.
+Medical History: Letting users save their skin type, age, and existing conditions to help the AI be more accurate.
+
+4. Professional Polish (Active)
+Push Notifications: Reminders to do a follow-up scan in 2 weeks.
+Doctor Export: Generating a PDF report of a scan that the user can show to a real dermatologist.
+Offline Mode: Allowing users to take photos while offline and sync them later.
+
+5. Onboarding & Safety (Active)
+Onboarding Tutorial: 4-page animated walkthrough for new users.
+Dermatologist Finder: Quick access to find nearby specialists and emergency helplines.

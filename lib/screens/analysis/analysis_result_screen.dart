@@ -7,15 +7,24 @@ import '../../models/risk_level.dart';
 import '../../widgets/risk_badge.dart';
 import '../../widgets/primary_button.dart';
 import '../../routing/app_router.dart';
+import '../../services/notification_service.dart';
+import '../../services/pdf_service.dart';
+import '../../services/auth_service.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AnalysisResultScreen extends StatefulWidget {
   final AnalysisResult? result;
   final String? imagePath;
 
+  final String? existingLesionId;
+
   const AnalysisResultScreen({
     super.key,
     this.result,
     this.imagePath,
+    this.existingLesionId,
   });
 
   @override
@@ -43,6 +52,76 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     _animCtrl.forward();
   }
 
+  Future<void> _scheduleReminder() async {
+    final result = _result;
+    if (result == null) return;
+
+    // Let user pick a date
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 14)),
+      firstDate: now.add(const Duration(days: 1)),
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'Select Follow-up Date',
+      confirmText: 'Schedule',
+    );
+
+    if (picked == null || !mounted) return;
+
+    // Schedule at 9 AM on the picked date
+    final scheduleDate = DateTime(picked.year, picked.month, picked.day, 9, 0);
+
+    final sc = ScaffoldMessenger.of(context);
+    try {
+      await NotificationService.scheduleFollowUp(
+        id: result.analyzedAt.millisecondsSinceEpoch.remainder(2147483647),
+        title: 'DermaScan Follow-up Reminder',
+        body:
+            'Time for your scheduled follow-up scan (${result.riskLevel.label} risk lesion).',
+        scheduledDate: scheduleDate,
+      );
+
+      final df = DateFormat('MMM d, yyyy');
+      sc.showSnackBar(
+        SnackBar(
+          content: Text('Reminder set for ${df.format(scheduleDate)} at 9:00 AM'),
+          backgroundColor: AppColors.riskLow,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      sc.showSnackBar(
+        SnackBar(
+          content: Text('Failed to set reminder: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    final result = _result;
+    if (result == null) return;
+
+    final sc = ScaffoldMessenger.of(context);
+    final auth = Provider.of<AuthService>(context, listen: false);
+
+    try {
+      sc.showSnackBar(const SnackBar(content: Text('Generating PDF report...')));
+      await PdfService.generateAndShareReport(
+        result: result,
+        auth: auth,
+        imageFile: widget.imagePath != null ? File(widget.imagePath!) : null,
+      );
+    } catch (e) {
+      sc.showSnackBar(
+        SnackBar(content: Text('Failed to generate PDF: $e')),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _animCtrl.dispose();
@@ -63,7 +142,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     final isHigh = result.riskLevel == RiskLevel.high;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           _buildAppBar(),
@@ -116,6 +195,19 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
       ),
       title: const Text('Scan Result',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.share_rounded, color: Colors.white),
+          onPressed: () {
+            final result = _result;
+            if (result != null) {
+              final text = 'My DermaScan AI result: ${result.riskLevel.label} risk detected with ${(result.confidence * 100).round()}% certainty. Tracking my skin health!';
+              Share.share(text);
+            }
+          },
+          tooltip: 'Share result',
+        ),
+      ],
     );
   }
 
@@ -128,18 +220,25 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
       height: 200,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: AppColors.cardDark,
-        border: Border.all(color: AppColors.divider),
+        color: Theme.of(context).brightness == Brightness.dark ? AppColors.cardDarkBody : AppColors.cardDark,
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
           if (hasImage)
             Positioned.fill(
-              child: Image.file(
-                File(widget.imagePath!),
-                fit: BoxFit.cover,
-              ),
+              child: widget.imagePath!.startsWith('http')
+                  ? CachedNetworkImage(
+                      imageUrl: widget.imagePath!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) => const Icon(Icons.error),
+                    )
+                  : Image.file(
+                      File(widget.imagePath!),
+                      fit: BoxFit.cover,
+                    ),
             )
           else
             Center(
@@ -147,9 +246,9 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.image_search_rounded,
-                      size: 56, color: AppColors.textMuted),
+                      size: 56, color: AppColors.getAdaptiveTextMuted(context)),
                   const SizedBox(height: 8),
-                  Text('Lesion Image', style: AppTextStyles.caption),
+                  const Text('Lesion Image', style: AppTextStyles.caption),
                 ],
               ),
             ),
@@ -164,7 +263,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    Colors.black.withOpacity(0.65),
+                    Colors.black.withValues(alpha: 0.65),
                     Colors.transparent,
                   ],
                 ),
@@ -196,12 +295,14 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
       duration: const Duration(milliseconds: 600),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: result.riskLevel.backgroundColor,
+        color: Theme.of(context).brightness == Brightness.dark 
+            ? result.riskLevel.color.withValues(alpha: 0.12) 
+            : result.riskLevel.backgroundColor,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: result.riskLevel.color.withOpacity(0.30)),
+        border: Border.all(color: result.riskLevel.color.withValues(alpha: 0.30)),
         boxShadow: [
           BoxShadow(
-            color: result.riskLevel.color.withOpacity(0.15),
+            color: result.riskLevel.color.withValues(alpha: 0.15),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -213,7 +314,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: result.riskLevel.color.withOpacity(0.15),
+              color: result.riskLevel.color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(result.riskLevel.icon,
@@ -227,7 +328,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                 Text(
                   'Risk Level',
                   style: AppTextStyles.caption.copyWith(
-                    color: result.riskLevel.color.withOpacity(0.80),
+                    color: result.riskLevel.color.withValues(alpha: 0.80),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -262,10 +363,10 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Model certainty', style: AppTextStyles.caption),
+              const Text('Model certainty', style: AppTextStyles.caption),
               Text(
                 '$pct%',
-                style: TextStyle(
+                style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
                   color: AppColors.primary,
@@ -281,7 +382,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
               builder: (_, __) => LinearProgressIndicator(
                 value: _confidenceAnim.value * result.confidence,
                 minHeight: 10,
-                backgroundColor: AppColors.divider,
+                backgroundColor: Theme.of(context).dividerColor,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   result.riskLevel.color,
                 ),
@@ -297,12 +398,14 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isHigh ? AppColors.riskHighBg : AppColors.riskLowBg,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? (isHigh ? AppColors.riskHigh.withValues(alpha: 0.15) : AppColors.riskLow.withValues(alpha: 0.15))
+            : (isHigh ? AppColors.riskHighBg : AppColors.riskLowBg),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isHigh
-              ? AppColors.riskHigh.withOpacity(0.30)
-              : AppColors.riskLow.withOpacity(0.30),
+              ? AppColors.riskHigh.withValues(alpha: 0.30)
+              : AppColors.riskLow.withValues(alpha: 0.30),
         ),
       ),
       child: Row(
@@ -345,9 +448,9 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,18 +473,49 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
   }
 
   Widget _buildActions(AnalysisResult result) {
+    final isHigh = result.riskLevel == RiskLevel.high;
     return Column(
       children: [
+        if (isHigh) ...[
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.dermatologistFinder),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.riskHigh,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 56),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 4,
+            ),
+            icon: const Icon(Icons.local_hospital_rounded),
+            label: const Text('Find a Dermatologist Near Me', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 12),
+        ],
         PrimaryButton(
           label: 'Save to History',
-          onPressed: () => Navigator.pushNamed(
+          onPressed: () => Navigator.pushReplacementNamed(
             context,
             AppRoutes.lesionDetail,
-            arguments: {'result': result, 'imagePath': widget.imagePath},
+            arguments: {
+              'result': result,
+              'imagePath': widget.imagePath,
+              'existingLesionId': widget.existingLesionId,
+            },
           ),
           icon: Icons.save_alt_rounded,
         ),
         const SizedBox(height: 12),
+        if (!isHigh) ...[
+          OutlinedButton.icon(
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.dermatologistFinder),
+            icon: const Icon(Icons.person_search_rounded),
+            label: const Text('Find a Dermatologist'),
+            style: _outlineStyle().copyWith(
+              minimumSize: WidgetStateProperty.all(const Size(double.infinity, 48)),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           children: [
             Expanded(
@@ -403,13 +537,38 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () =>
-                    Navigator.pushReplacementNamed(context, AppRoutes.camera),
+                    Navigator.pushReplacementNamed(
+                  context,
+                  AppRoutes.camera,
+                  arguments: {'existingLesionId': widget.existingLesionId},
+                ),
                 icon: const Icon(Icons.camera_alt_rounded),
                 label: const Text('New Scan'),
                 style: _outlineStyle(),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _scheduleReminder,
+          icon: const Icon(Icons.notification_add_rounded),
+          label: const Text('Schedule 2-Week Follow-up'),
+          style: _outlineStyle().copyWith(
+            minimumSize: WidgetStateProperty.all(const Size(double.infinity, 48)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: _exportPdf,
+          icon: const Icon(Icons.picture_as_pdf_rounded),
+          label: const Text('Export PDF Report for Doctor'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
         ),
       ],
     );
@@ -418,7 +577,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
   ButtonStyle _outlineStyle() => OutlinedButton.styleFrom(
         foregroundColor: AppColors.primary,
         padding: const EdgeInsets.symmetric(vertical: 14),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: Theme.of(context).dividerColor),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       );
 }
