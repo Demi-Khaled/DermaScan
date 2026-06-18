@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser, logoutUser, updateUser, deleteUser, googleLogin, refreshAccessToken, uploadProfilePicture, changePassword, forgotPassword, verifyOTP, resetPassword } = require('../controllers/authController');
+const { registerUser, loginUser, logoutUser, updateUser, deleteUser, googleLogin, refreshAccessToken, uploadProfilePicture, changePassword, forgotPassword, verifyOTP, resetPassword, verifyRegistration, resendVerificationOTP } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { profileUpload } = require('../config/cloudinary');
 
@@ -16,5 +16,7 @@ router.post('/upload-avatar', protect, profileUpload.single('avatar'), uploadPro
 router.post('/forgot-password', forgotPassword);
 router.post('/verify-otp', verifyOTP);
 router.post('/reset-password', resetPassword);
+router.post('/verify-registration', verifyRegistration);
+router.post('/resend-verification', resendVerificationOTP);
 
 module.exports = router;

@@ -191,6 +191,7 @@ class SyncService {
               confidence: result.confidence,
               explanation: result.explanation,
               recommendation: result.recommendation,
+              conditionName: result.conditionName,
               imagePath: result.imagePath ?? scan.imagePath,
             );
             

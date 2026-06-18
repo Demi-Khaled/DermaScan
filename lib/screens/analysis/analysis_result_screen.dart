@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
+import '../../services/chat_service.dart';
 import '../../services/ai_service.dart';
 import '../../models/risk_level.dart';
 import '../../widgets/risk_badge.dart';
@@ -143,6 +144,18 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.pushNamed(
+            context,
+            AppRoutes.chat,
+            arguments: {'result': result},
+          );
+        },
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.auto_awesome, color: Colors.white),
+        label: const Text('Ask AI Agent', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
       body: CustomScrollView(
         slivers: [
           _buildAppBar(),
@@ -158,6 +171,11 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                   // Risk card
                   _buildRiskCard(result),
                   const SizedBox(height: 20),
+                  // Condition Name card (NEW)
+                  if (result.conditionName != null && result.conditionName!.isNotEmpty) ...[
+                    _buildConditionCard(result.conditionName!),
+                    const SizedBox(height: 20),
+                  ],
                   // Confidence bar
                   _buildConfidenceSection(result),
                   const SizedBox(height: 20),
@@ -168,6 +186,9 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                     iconColor: AppColors.accent,
                     child: Text(result.explanation, style: AppTextStyles.body),
                   ),
+                  const SizedBox(height: 16),
+                  // ABCDE Checklist
+                  _buildABCDEChecklist(),
                   const SizedBox(height: 16),
                   // Recommendation
                   _buildRecommendation(result, isHigh),
@@ -580,4 +601,97 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
         side: BorderSide(color: Theme.of(context).dividerColor),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       );
+
+  Widget _buildConditionCard(String conditionName) {
+    String formattedName = conditionName.replaceAll('_', ' ');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.biotech_rounded, color: AppColors.primary),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Detected Condition', style: AppTextStyles.caption),
+                const SizedBox(height: 2),
+                Text(
+                  formattedName,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildABCDEChecklist() {
+    return _buildSection(
+      title: 'ABCDE Clinical Checklist',
+      icon: Icons.checklist_rtl_rounded,
+      iconColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2DD4BF) : Colors.teal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Watch out for these melanoma warning signs:', style: TextStyle(fontSize: 13, color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF94A3B8) : AppColors.textMuted)),
+          const SizedBox(height: 12),
+          _checklistRow('A', 'Asymmetry', 'One half doesn\'t match the other'),
+          _checklistRow('B', 'Border', 'Edges are irregular or blurred'),
+          _checklistRow('C', 'Color', 'Uneven shades of brown, black, or red'),
+          _checklistRow('D', 'Diameter', 'Larger than 6mm (pencil eraser size)'),
+          _checklistRow('E', 'Evolving', 'Changes in size, shape, or color'),
+        ],
+      ),
+    );
+  }
+
+  Widget _checklistRow(String letter, String title, String desc) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2DD4BF) : Colors.teal).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(letter, style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2DD4BF) : Colors.teal, fontWeight: FontWeight.bold, fontSize: 13)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFF8FAFC) : AppColors.textPrimary)),
+                Text(desc, style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF94A3B8) : AppColors.textMuted, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

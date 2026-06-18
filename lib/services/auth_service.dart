@@ -203,6 +203,12 @@ class AuthService extends ChangeNotifier {
         return true;
       } else {
         final error = _safeDecode(response.body);
+        if (error['requiresVerification'] == true) {
+          throw EmailNotVerifiedException(
+            error['message'] ?? 'Please verify your email.',
+            error['email'] ?? email,
+          );
+        }
         throw Exception(error['message'] ?? 'Login failed');
       }
     } on TimeoutException {
@@ -266,14 +272,75 @@ class AuthService extends ChangeNotifier {
         }),
       ).timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 201) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = _safeDecode(response.body);
+        if (data['requiresVerification'] == true) {
+          throw EmailNotVerifiedException(
+            data['message'] ?? 'Verification code sent. Please check your email.',
+            data['email'] ?? email,
+          );
+        }
+        await _saveUser(data);
+        return true;
+      } else {
+        final error = _safeDecode(response.body);
+        if (error['requiresVerification'] == true) {
+          throw EmailNotVerifiedException(
+            error['message'] ?? 'Verification code sent. Please check your email.',
+            error['email'] ?? email,
+          );
+        }
+        throw Exception(error['message'] ?? 'Registration failed');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<bool> verifyRegistration(String email, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConstants.apiBaseUrl}/auth/verify-registration'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'otp': otp,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
         final data = _safeDecode(response.body);
         await _saveUser(data);
         return true;
       } else {
         final error = _safeDecode(response.body);
-        throw Exception(error['message'] ?? 'Registration failed');
+        throw Exception(error['message'] ?? 'Verification failed');
       }
+    } on TimeoutException {
+      throw Exception('Verification timed out. Check your connection.');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<bool> resendVerification(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConstants.apiBaseUrl}/auth/resend-verification'), // wait, actually backend route is /auth/resend-verification because apiBaseUrl is /api/auth or similar. Let's verify AppConstants.apiBaseUrl.
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        final error = _safeDecode(response.body);
+        throw Exception(error['message'] ?? 'Failed to resend code');
+      }
+    } on TimeoutException {
+      throw Exception('Resend timed out. Check your connection.');
     } catch (e) {
       rethrow;
     }
@@ -489,4 +556,14 @@ class AuthService extends ChangeNotifier {
       throw Exception('Server returned an invalid response. Please try again.');
     }
   }
+}
+
+class EmailNotVerifiedException implements Exception {
+  final String message;
+  final String email;
+
+  EmailNotVerifiedException(this.message, this.email);
+
+  @override
+  String toString() => message;
 }

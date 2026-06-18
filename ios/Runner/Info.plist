@@ -73,5 +73,9 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to location to find nearby dermatologists.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to your camera to take photos of skin lesions for analysis.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photo library to select photos of skin lesions for analysis.</string>
 </dict>
 </plist>

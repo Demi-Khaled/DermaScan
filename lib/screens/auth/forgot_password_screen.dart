@@ -5,7 +5,8 @@ import '../../widgets/primary_button.dart';
 import '../../services/auth_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
+  final String? initialEmail;
+  const ForgotPasswordScreen({super.key, this.initialEmail});
 
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
@@ -21,6 +22,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _step = 0; // 0: Email, 1: OTP, 2: New Password
   bool _isLoading = false;
   bool _passVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty) {
+      _emailCtrl.text = widget.initialEmail!;
+      // Auto-trigger OTP sending if an email was passed in (e.g. from Profile)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleStep0();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -76,6 +89,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         _otpCtrl.text.trim(),
         _newPassCtrl.text,
       );
+      if (!mounted) return;
       _showSnackBar('Password reset successful! Please login.');
       Navigator.pop(context);
     } catch (e) {

@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -203,6 +205,31 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
 
+    // Pre-load all lesion images asynchronously before building the PDF
+    // Supports both local file paths and remote Cloudinary/HTTP URLs
+    final Map<String, pw.ImageProvider> lesionImages = {};
+    for (final lesion in lesions) {
+      final path = lesion.imagePath;
+      if (path == null || path.isEmpty || path == 'demo_lesion.jpg') continue;
+      try {
+        Uint8List? bytes;
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          // Remote image (e.g. Cloudinary)
+          final response = await http.get(Uri.parse(path));
+          if (response.statusCode == 200) bytes = response.bodyBytes;
+        } else {
+          // Local file
+          final file = File(path);
+          if (await file.exists()) bytes = await file.readAsBytes();
+        }
+        if (bytes != null) {
+          lesionImages[lesion.id] = pw.MemoryImage(bytes);
+        }
+      } catch (_) {
+        // Skip image silently if it fails to load
+      }
+    }
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -216,7 +243,7 @@ class PdfService {
             pw.Text('Full Lesion History Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 10),
             pw.Divider(),
-            ...lesions.map((l) => _buildLesionSummary(l)),
+            ...lesions.map((l) => _buildLesionSummary(l, image: lesionImages[l.id])),
             pw.SizedBox(height: 40),
             _buildDisclaimer(),
           ];
@@ -230,50 +257,89 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildLesionSummary(Lesion lesion) {
+  static pw.Widget _buildLesionSummary(Lesion lesion, {pw.ImageProvider? image}) {
     final riskColor = lesion.latestRisk.label == 'High' 
         ? PdfColors.red 
         : (lesion.latestRisk.label == 'Medium' ? PdfColors.orange : PdfColors.green);
 
     return pw.Container(
-      margin: const pw.EdgeInsets.only(bottom: 12),
-      padding: const pw.EdgeInsets.all(10),
+      margin: const pw.EdgeInsets.only(bottom: 16),
+      padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: PdfColors.grey200),
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
       ),
-      child: pw.Column(
+      child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(lesion.name, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: pw.BoxDecoration(
-                  color: riskColor,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
-                ),
-                child: pw.Text(
-                  lesion.latestRisk.label.toUpperCase(),
-                  style: pw.TextStyle(color: PdfColors.white, fontSize: 8, fontWeight: pw.FontWeight.bold),
-                ),
+          // Image thumbnail on the left
+          if (image != null)
+            pw.Container(
+              width: 90,
+              height: 90,
+              margin: const pw.EdgeInsets.only(right: 12),
+              decoration: pw.BoxDecoration(
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                border: pw.Border.all(color: PdfColors.grey300),
               ),
-            ],
+              child: pw.ClipRRect(
+                horizontalRadius: 6,
+                verticalRadius: 6,
+                child: pw.Image(image, fit: pw.BoxFit.cover),
+              ),
+            )
+          else
+            pw.Container(
+              width: 90,
+              height: 90,
+              margin: const pw.EdgeInsets.only(right: 12),
+              decoration: const pw.BoxDecoration(
+                color: PdfColors.grey200,
+                borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
+              ),
+              child: pw.Center(
+                child: pw.Text('No Image', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+              ),
+            ),
+          // Text info on the right
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(lesion.name, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: pw.BoxDecoration(
+                        color: riskColor,
+                        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                      ),
+                      child: pw.Text(
+                        lesion.latestRisk.label.toUpperCase(),
+                        style: pw.TextStyle(color: PdfColors.white, fontSize: 8, fontWeight: pw.FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 6),
+                pw.Text('Location: ${lesion.bodyLocation}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                pw.Text('Last Scan: ${DateFormat('MMM dd, yyyy').format(lesion.lastScan)}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                pw.Text('Total Scans: ${lesion.scanHistory.length}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                if (lesion.notes.isNotEmpty) ...[
+                  pw.SizedBox(height: 4),
+                  pw.Text('Notes: ${lesion.notes}', style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic)),
+                ],
+              ],
+            ),
           ),
-          pw.SizedBox(height: 4),
-          pw.Text('Location: ${lesion.bodyLocation}', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-          pw.Text('Last Scan: ${DateFormat('MMM dd, yyyy').format(lesion.lastScan)}', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-          pw.Text('Total Scans: ${lesion.scanHistory.length}', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-          if (lesion.notes.isNotEmpty) ...[
-            pw.SizedBox(height: 4),
-            pw.Text('Notes: ${lesion.notes}', style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic)),
-          ],
         ],
       ),
     );
   }
+
+
 
   static pw.Widget _infoField(String label, String value) {
     return pw.RichText(

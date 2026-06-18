@@ -83,3 +83,6 @@ build/
 # Backend related
 node_modules/
 .env
+*.pth
+.env
+backend/.env

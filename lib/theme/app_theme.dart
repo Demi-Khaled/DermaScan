@@ -207,8 +207,8 @@ ThemeData _buildTheme({required bool isDark}) {
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: isDark ? AppColors.cardDarkBody : Colors.white,
-      selectedItemColor: AppColors.primaryLight,
-      unselectedItemColor: isDark ? AppColors.textMutedDark : AppColors.textMuted,
+      selectedItemColor: isDark ? const Color(0xFF60A5FA) : AppColors.primaryLight,
+      unselectedItemColor: isDark ? const Color(0xFF94A3B8) : AppColors.textMuted,
       elevation: 8,
       type: BottomNavigationBarType.fixed,
     ),

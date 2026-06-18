@@ -34,6 +34,11 @@ class _AuthScreenState extends State<AuthScreen>
   bool _signUpConfirmVisible = false;
   final _signUpFormKey = GlobalKey<FormState>();
 
+  // OTP Verification state
+  bool _isVerifyingOtp = false;
+  String _tempEmail = '';
+  final _otpCtrl = TextEditingController();
+
   bool _isLoading = false;
 
   @override
@@ -56,6 +61,7 @@ class _AuthScreenState extends State<AuthScreen>
     _signUpEmailCtrl.dispose();
     _signUpPassCtrl.dispose();
     _signUpConfirmCtrl.dispose();
+    _otpCtrl.dispose();
     super.dispose();
   }
 
@@ -86,12 +92,104 @@ class _AuthScreenState extends State<AuthScreen>
       
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } on EmailNotVerifiedException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _tempEmail = e.email;
+        _isVerifyingOtp = true;
+        _otpCtrl.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceAll('Exception: ', '')),
           backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleVerifyOtp() async {
+    if (_otpCtrl.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter the 6-digit verification code'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.verifyRegistration(_tempEmail, _otpCtrl.text.trim());
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Account verified successfully!'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleResendOtp() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.resendVerification(_tempEmail);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Verification code resent!'),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } finally {
@@ -129,23 +227,32 @@ class _AuthScreenState extends State<AuthScreen>
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              _buildLogo(),
-              const SizedBox(height: 36),
-              _buildTabBar(),
-              const SizedBox(height: 28),
-              FadeTransition(
-                opacity: _fadeAnim,
-                child: _tabIndex == 0 ? _buildLoginForm() : _buildSignUpForm(),
-              ),
-              const SizedBox(height: 20),
-              _buildGoogleBtn(),
-              const SizedBox(height: 28),
-              _buildDisclaimer(),
-              const SizedBox(height: 16),
-              _buildFooterLinks(),
-            ],
+            children: _isVerifyingOtp
+                ? [
+                    const SizedBox(height: 40),
+                    _buildLogo(),
+                    const SizedBox(height: 48),
+                    _buildOtpForm(),
+                    const SizedBox(height: 40),
+                    _buildFooterLinks(),
+                  ]
+                : [
+                    const SizedBox(height: 20),
+                    _buildLogo(),
+                    const SizedBox(height: 36),
+                    _buildTabBar(),
+                    const SizedBox(height: 28),
+                    FadeTransition(
+                      opacity: _fadeAnim,
+                      child: _tabIndex == 0 ? _buildLoginForm() : _buildSignUpForm(),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildGoogleBtn(),
+                    const SizedBox(height: 28),
+                    _buildDisclaimer(),
+                    const SizedBox(height: 16),
+                    _buildFooterLinks(),
+                  ],
           ),
         ),
       ),
@@ -262,7 +369,8 @@ class _AuthScreenState extends State<AuthScreen>
             keyboardType: TextInputType.emailAddress,
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Email is required';
-              if (!v.contains('@')) return 'Enter a valid email';
+              final emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+              if (!emailRegex.hasMatch(v)) return 'Enter a valid email';
               return null;
             },
           ),
@@ -354,7 +462,8 @@ class _AuthScreenState extends State<AuthScreen>
             keyboardType: TextInputType.emailAddress,
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Email is required';
-              if (!v.contains('@')) return 'Enter a valid email';
+              final emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+              if (!emailRegex.hasMatch(v)) return 'Enter a valid email';
               return null;
             },
           ),
@@ -421,6 +530,97 @@ class _AuthScreenState extends State<AuthScreen>
             icon: Icons.person_add_rounded,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildOtpForm() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: () => setState(() {
+                    _isVerifyingOtp = false;
+                  }),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Verify Email',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'We sent a 6-digit verification code to:',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.getAdaptiveTextSecondary(context),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _tempEmail,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _otpCtrl,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 8,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Verification Code',
+                hintText: '000000',
+                counterText: '',
+                prefixIcon: Icon(Icons.security_rounded),
+              ),
+            ),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              label: 'Verify Code',
+              onPressed: _isLoading ? () {} : _handleVerifyOtp,
+              isLoading: _isLoading,
+              icon: Icons.check_circle_outline_rounded,
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.center,
+              child: TextButton(
+                onPressed: _isLoading ? null : _handleResendOtp,
+                child: const Text(
+                  'Resend Code',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryLight,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

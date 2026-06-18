@@ -13,6 +13,7 @@ import '../screens/dermatologist/dermatologist_finder_screen.dart';
 import '../services/ai_service.dart';
 import '../models/lesion.dart';
 import '../screens/lesion/comparison_screen.dart';
+import '../screens/analysis/chat_screen.dart';
 
 class AppRoutes {
   static const String auth = '/auth';
@@ -27,6 +28,7 @@ class AppRoutes {
   static const String dermatologistFinder = '/dermatologist-finder';
   static const String forgotPassword = '/forgot-password';
   static const String comparison = '/comparison';
+  static const String chat = '/chat';
 }
 
 class AppRouter {
@@ -36,7 +38,9 @@ class AppRouter {
         return _fadeRoute(const AuthScreen(), settings);
       
       case AppRoutes.forgotPassword:
-        return _slideRoute(const ForgotPasswordScreen(), settings);
+        final args = settings.arguments is Map<String, dynamic> ? settings.arguments as Map<String, dynamic> : null;
+        final email = args?['email'] as String?;
+        return _slideRoute(ForgotPasswordScreen(initialEmail: email), settings);
 
       case AppRoutes.home:
         return _fadeRoute(const HomeScreen(), settings);
@@ -59,6 +63,11 @@ class AppRouter {
           ),
           settings,
         );
+
+      case AppRoutes.chat:
+        final args = settings.arguments is Map<String, dynamic> ? settings.arguments as Map<String, dynamic> : null;
+        final result = args?['result'] as AnalysisResult?;
+        return _slideRoute(ChatScreen(result: result!), settings);
 
       case AppRoutes.lesionDetail:
         final args = settings.arguments is Map<String, dynamic> ? settings.arguments as Map<String, dynamic> : null;

@@ -1,4 +1,3 @@
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'risk_level.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +10,7 @@ class ScanEntry {
   final String? imagePath;
   final String explanation;
   final String recommendation;
+  final String? conditionName;
 
   ScanEntry({
     required this.id,
@@ -20,6 +20,7 @@ class ScanEntry {
     this.imagePath,
     required this.explanation,
     required this.recommendation,
+    this.conditionName,
   });
 
   factory ScanEntry.fromJson(Map<String, dynamic> json) {
@@ -31,6 +32,7 @@ class ScanEntry {
       imagePath: json['imagePath'],
       explanation: json['explanation'] ?? '',
       recommendation: json['recommendation'] ?? '',
+      conditionName: json['conditionName'],
     );
   }
 
@@ -42,6 +44,7 @@ class ScanEntry {
     'imagePath': imagePath,
     'explanation': explanation,
     'recommendation': recommendation,
+    'conditionName': conditionName,
   };
 
   static RiskLevel _parseRisk(dynamic risk) {

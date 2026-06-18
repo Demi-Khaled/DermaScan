@@ -1,0 +1,8 @@
+flask
+gunicorn
+torch
+torchvision
+albumentations
+numpy
+Pillow
+werkzeug

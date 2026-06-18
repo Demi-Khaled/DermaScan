@@ -342,7 +342,11 @@ class _ProfileScreenState extends State<ProfileScreen>
           'Change Password',
           Icons.lock_reset_rounded,
           AppColors.secondary,
-          () => Navigator.pushNamed(context, AppRoutes.forgotPassword),
+          () => Navigator.pushNamed(
+            context, 
+            AppRoutes.forgotPassword, 
+            arguments: {'email': _email},
+          ),
         ),
         const SizedBox(height: 12),
         _actionTile(
@@ -576,11 +580,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.notifications_active_rounded, color: AppColors.primary),
-            const SizedBox(width: 12),
-            const Text('Reminder Details'),
+            Icon(Icons.notifications_active_rounded, color: AppColors.primary),
+            SizedBox(width: 12),
+            Text('Reminder Details'),
           ],
         ),
         content: Column(
@@ -625,8 +629,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           ElevatedButton(
             onPressed: () async {
               await NotificationService.cancelReminder(r.id);
+              if (!context.mounted) return;
+              Navigator.pop(context);
               if (mounted) {
-                Navigator.pop(context);
                 _loadPendingReminders();
               }
             },

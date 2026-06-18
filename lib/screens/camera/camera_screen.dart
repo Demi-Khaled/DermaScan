@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/ai_service.dart';
@@ -25,6 +26,18 @@ class _CameraScreenState extends State<CameraScreen>
   bool _hasError = false;
   XFile? _capturedFile;
   bool _isAnalyzing = false;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        setState(() => _capturedFile = image);
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -278,40 +291,48 @@ class _CameraScreenState extends State<CameraScreen>
               ),
             ),
 
-          // Capture button
+          // Capture button and gallery option
           Positioned(
             bottom: 48,
             left: 0,
             right: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap: _isInitialized ? _capture : null,
-                child: Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(
-                      color: _isInitialized ? Colors.white : Colors.white38,
-                      width: 4,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.60),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _circleBtn(Icons.photo_library_rounded, _pickFromGallery),
+                  GestureDetector(
+                    onTap: _isInitialized ? _capture : null,
+                    child: Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        border: Border.all(
+                          color: _isInitialized ? Colors.white : Colors.white38,
+                          width: 4,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.60),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Container(
-                    margin: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _isInitialized ? AppColors.primary : Colors.grey,
+                      child: Container(
+                        margin: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _isInitialized ? AppColors.primary : Colors.grey,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 44), // To keep the capture button centered
+                ],
               ),
             ),
           ),

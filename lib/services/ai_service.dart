@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import '../core/constants.dart';
 import '../models/risk_level.dart';
 
@@ -10,6 +11,7 @@ class AnalysisResult {
   final double confidence; // 0.0 – 1.0
   final String explanation;
   final String recommendation;
+  final String? conditionName;
   final DateTime analyzedAt;
   final String? imagePath; // Cloudinary URL or local path
 
@@ -18,6 +20,7 @@ class AnalysisResult {
     required this.confidence,
     required this.explanation,
     required this.recommendation,
+    this.conditionName,
     this.imagePath,
     DateTime? analyzedAt,
   }) : analyzedAt = analyzedAt ?? DateTime.now();
@@ -44,11 +47,16 @@ class AiService {
             confidence: (data['confidence'] as num).toDouble(),
             explanation: data['explanation'],
             recommendation: data['recommendation'],
+            conditionName: data['class_name'],
             imagePath: data['imagePath'],
           );
+        } else {
+          throw Exception('Failed to analyze lesion: HTTP ${response.statusCode}');
         }
       } catch (e) {
-        print('Cloudinary upload error: $e. Falling back to mock.');
+        debugPrint('Cloudinary upload error: $e.');
+        // Throw exception so caller can trigger offline queueing or show error
+        throw Exception('Network error or server unavailable');
       }
     }
 
@@ -60,20 +68,23 @@ class AiService {
       AnalysisResult(
         riskLevel: RiskLevel.low,
         confidence: 0.88 + rng.nextDouble() * 0.10,
-        explanation: 'The lesion displays uniform pigmentation with well-defined, symmetrical borders.',
+        explanation: 'Based on your scan, the lesion appears to be a common Nevus (mole). It displays uniform pigmentation with well-defined, symmetrical borders, which is typically a very healthy sign. While this looks benign, please remember I am an AI and you should continue regular self-monitoring.',
         recommendation: 'Continue regular self-monitoring every 3 months. Apply sunscreen.',
+        conditionName: 'Nevus',
       ),
       AnalysisResult(
         riskLevel: RiskLevel.medium,
         confidence: 0.70 + rng.nextDouble() * 0.15,
-        explanation: 'Slight asymmetry observed in the lesion border. Mild color variation is present.',
+        explanation: 'Based on your scan, I am detecting signs consistent with Actinic Keratosis. There is some slight asymmetry and mild color variation present in the border. As an AI screening tool, I recommend having a medical professional take a look to be perfectly safe.',
         recommendation: 'Schedule a dermatologist appointment within the next 2–4 weeks.',
+        conditionName: 'Actinic_Keratosis',
       ),
       AnalysisResult(
         riskLevel: RiskLevel.high,
         confidence: 0.60 + rng.nextDouble() * 0.20,
-        explanation: 'Multiple irregular features detected: asymmetrical borders, heterogeneous coloring.',
+        explanation: 'Based on your scan, there are multiple irregular features detected, such as asymmetrical borders and heterogeneous coloring, which can be associated with Melanoma. Please do not panic, but because I am an AI and this is a high-risk pattern, it is very important that you have this evaluated by a licensed dermatologist as soon as possible.',
         recommendation: '⚠️ Seek immediate medical attention.',
+        conditionName: 'Melanoma',
       ),
     ];
 

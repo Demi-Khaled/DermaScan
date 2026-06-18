@@ -1,0 +1,38 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+*.egg
+
+# Virtual environment
+venv/
+env/
+.venv/
+ENV/
+
+# Development tools
+.git/
+.gitignore
+*.md
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests / notebooks
+tests/
+*.ipynb
+
+# Local config / secrets
+*.env
+.env
+.env.*

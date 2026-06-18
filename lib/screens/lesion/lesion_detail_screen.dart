@@ -50,13 +50,14 @@ class _LesionDetailScreenState extends State<LesionDetailScreen> {
     final result = widget.fromResult;
     if (result != null && widget.lesion == null) {
       final entry = ScanEntry(
-        id: 'new_${DateTime.now().millisecondsSinceEpoch}',
+        id: result.analyzedAt.millisecondsSinceEpoch.toString(),
         date: result.analyzedAt,
         riskLevel: result.riskLevel,
         confidence: result.confidence,
         explanation: result.explanation,
         recommendation: result.recommendation,
         imagePath: result.imagePath ?? widget.imagePath,
+        conditionName: result.conditionName,
       );
 
       // Check if we should append to an existing lesion or create a new one
@@ -194,6 +195,7 @@ class _LesionDetailScreenState extends State<LesionDetailScreen> {
       _lesion.reminderDate = scheduleDate;
       LesionStore().update(_lesion);
       
+      if (!mounted) return;
       final token = context.read<AuthService>().token;
       if (token != null) {
         SyncService.uploadLesion(_lesion, token: token);

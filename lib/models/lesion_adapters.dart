@@ -35,20 +35,22 @@ class ScanEntryAdapter extends TypeAdapter<ScanEntry> {
       imagePath: fields[4] as String?,
       explanation: fields[5] as String,
       recommendation: fields[6] as String,
+      conditionName: fields.containsKey(7) ? fields[7] as String? : null,
     );
   }
 
   @override
   void write(BinaryWriter writer, ScanEntry obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(8)
       ..writeByte(0)..write(obj.id)
       ..writeByte(1)..write(obj.date)
       ..writeByte(2)..write(obj.riskLevel)
       ..writeByte(3)..write(obj.confidence)
       ..writeByte(4)..write(obj.imagePath)
       ..writeByte(5)..write(obj.explanation)
-      ..writeByte(6)..write(obj.recommendation);
+      ..writeByte(6)..write(obj.recommendation)
+      ..writeByte(7)..write(obj.conditionName);
   }
 }
 
