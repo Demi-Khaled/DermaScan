@@ -3,6 +3,7 @@ import '../../theme/app_theme.dart';
 import '../../services/ai_service.dart';
 import '../../services/chat_service.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatScreen extends StatefulWidget {
   final AnalysisResult result;
@@ -18,17 +19,13 @@ class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final ScrollController _scrollController = ScrollController();
   
-  final List<ChatMessage> _messages = [];
+  late List<ChatMessage> _messages;
   bool _isTyping = false;
 
   @override
   void initState() {
     super.initState();
-    // Add initial greeting message
-    _messages.add(ChatMessage(
-      text: 'Hi! I am your AI DermaScan Assistant. I have analyzed your lesion image and found a ${widget.result.riskLevel.label.toLowerCase()} risk of ${widget.result.conditionName?.replaceAll('_', ' ') ?? 'a skin condition'}. Do you have any questions about this result?',
-      isUser: false,
-    ));
+    _messages = _chatService.getMessages(widget.result);
   }
 
   void _handleSubmitted(String text) async {
@@ -176,14 +173,32 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
-              child: Text(
-                message.text,
-                style: TextStyle(
-                  color: message.isUser 
-                      ? Colors.white 
-                      : (isDark ? const Color(0xFFF8FAFC) : Theme.of(context).textTheme.bodyLarge?.color),
-                  fontSize: 15,
-                  height: 1.4,
+              child: MarkdownBody(
+                data: message.text,
+                selectable: true,
+                styleSheet: MarkdownStyleSheet(
+                  p: TextStyle(
+                    color: message.isUser 
+                        ? Colors.white 
+                        : (isDark ? const Color(0xFFF8FAFC) : Theme.of(context).textTheme.bodyLarge?.color),
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                  strong: TextStyle(
+                    color: message.isUser 
+                        ? Colors.white 
+                        : (isDark ? const Color(0xFFF8FAFC) : Theme.of(context).textTheme.bodyLarge?.color),
+                    fontWeight: FontWeight.bold,
+                  ),
+                  listBullet: TextStyle(
+                    color: message.isUser 
+                        ? Colors.white 
+                        : (isDark ? const Color(0xFFF8FAFC) : Theme.of(context).textTheme.bodyLarge?.color),
+                    fontSize: 16,
+                  ),
+                  h1: TextStyle(color: message.isUser ? Colors.white : (isDark ? Colors.white : AppColors.primary), fontSize: 20, fontWeight: FontWeight.bold),
+                  h2: TextStyle(color: message.isUser ? Colors.white : (isDark ? Colors.white : AppColors.primary), fontSize: 18, fontWeight: FontWeight.bold),
+                  h3: TextStyle(color: message.isUser ? Colors.white : (isDark ? Colors.white : AppColors.primary), fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),

@@ -19,17 +19,35 @@ class ChatMessage {
 }
 
 class ChatService {
+  static final ChatService _instance = ChatService._internal();
+  factory ChatService() => _instance;
+  ChatService._internal();
+
   final _storage = const FlutterSecureStorage();
 
-  /// Conversation history for multi-turn chat
-  final List<Map<String, dynamic>> _history = [];
-  String? _systemInstruction;
+  final Map<int, List<Map<String, dynamic>>> _histories = {};
+  final Map<int, List<ChatMessage>> _messages = {};
+  final Map<int, String> _systemInstructions = {};
 
-  /// Builds the system instruction from the scan context.
+  List<ChatMessage> getMessages(AnalysisResult result) {
+    final id = result.analyzedAt.millisecondsSinceEpoch;
+    if (!_messages.containsKey(id)) {
+      _messages[id] = [
+        ChatMessage(
+          text: 'Hi! I am your AI DermaScan Assistant. I have analyzed your lesion image and found a ${result.riskLevel.label.toLowerCase()} risk of ${result.conditionName?.replaceAll('_', ' ') ?? 'a skin condition'}. Do you have any questions about this result?',
+          isUser: false,
+        )
+      ];
+      _histories[id] = [];
+    }
+    return _messages[id]!;
+  }
+
   void _ensureSession(AnalysisResult context) {
-    if (_systemInstruction != null) return;
+    final id = context.analyzedAt.millisecondsSinceEpoch;
+    if (_systemInstructions.containsKey(id)) return;
 
-    _systemInstruction = '''
+    _systemInstructions[id] = '''
 ROLE: You are DermaScan AI, a specialized skin health assistant inside the DermaScan app.
 
 ALLOWED TOPICS — you may ONLY discuss:
@@ -57,12 +75,11 @@ Use this scan context to give personalized, relevant answers to the user's skin-
 ''';
   }
 
-  /// Sends a message to our Node.js backend which proxies the request to Gemini
   Future<ChatMessage> sendMessage(String message, AnalysisResult context) async {
+    final id = context.analyzedAt.millisecondsSinceEpoch;
     _ensureSession(context);
 
-    // Add the user's message to conversation history
-    _history.add({
+    _histories[id]!.add({
       'role': 'user',
       'parts': [{'text': message}],
     });
@@ -77,8 +94,8 @@ Use this scan context to give personalized, relevant answers to the user's skin-
       
       final body = <String, dynamic>{
         'message': message,
-        'history': _history,
-        'systemInstruction': _systemInstruction,
+        'history': _histories[id],
+        'systemInstruction': _systemInstructions[id],
       };
 
       final response = await http.post(
@@ -94,27 +111,22 @@ Use this scan context to give personalized, relevant answers to the user's skin-
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final text = data['text'] as String? ?? 'I could not generate a response.';
 
-        // Add the model's response to conversation history
-        _history.add({
+        _histories[id]!.add({
           'role': 'model',
           'parts': [{'text': text}],
         });
 
         return ChatMessage(text: text, isUser: false);
       } else if (response.statusCode == 401) {
-        // Remove the failed user message from history so retries work
-        _history.removeLast();
+        _histories[id]!.removeLast();
         return ChatMessage(
           text: 'Your session has expired. Please log out and log back in to use the AI chat.',
           isUser: false,
         );
       }
 
-      // Log the error for debugging
       debugPrint('Backend API error: ${response.statusCode} — ${response.body}');
-
-      // Remove the failed user message from history so retries work
-      _history.removeLast();
+      _histories[id]!.removeLast();
 
       return ChatMessage(
         text: 'Sorry, the AI service returned an unexpected response (${response.statusCode}). Please try again.',
@@ -123,8 +135,7 @@ Use this scan context to give personalized, relevant answers to the user's skin-
     } catch (e) {
       debugPrint('Error communicating with backend API: $e');
 
-      // Remove the failed user message from history so retries work
-      if (_history.isNotEmpty) _history.removeLast();
+      if (_histories[id]!.isNotEmpty) _histories[id]!.removeLast();
 
       return ChatMessage(
         text: 'Sorry, I encountered a network error. Please check your connection and try again.',
@@ -133,9 +144,10 @@ Use this scan context to give personalized, relevant answers to the user's skin-
     }
   }
 
-  /// Resets the conversation history (e.g. when starting a new scan context).
-  void resetChat() {
-    _history.clear();
-    _systemInstruction = null;
+  void resetChat(AnalysisResult result) {
+    final id = result.analyzedAt.millisecondsSinceEpoch;
+    _histories.remove(id);
+    _messages.remove(id);
+    _systemInstructions.remove(id);
   }
 }

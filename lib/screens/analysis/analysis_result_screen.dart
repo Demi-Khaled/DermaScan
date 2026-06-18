@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
-import '../../services/chat_service.dart';
 import '../../services/ai_service.dart';
 import '../../models/risk_level.dart';
 import '../../widgets/risk_badge.dart';

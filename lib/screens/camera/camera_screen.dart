@@ -9,6 +9,7 @@ import '../../routing/app_router.dart';
 import '../../widgets/primary_button.dart';
 import '../../services/sync_service.dart';
 import '../../services/auth_service.dart';
+import '../../core/constants.dart';
 
 class CameraScreen extends StatefulWidget {
   final String? existingLesionId;
@@ -110,14 +111,72 @@ class _CameraScreenState extends State<CameraScreen>
           'existingLesionId': widget.existingLesionId,
         },
       );
+    } on InvalidImageException catch (e) {
+      if (!mounted) return;
+      setState(() => _capturedFile = null); // Clear the invalid photo
+      _showInvalidImageDialog(e.message);
     } catch (e) {
       if (!mounted) return;
-      
       // Offer to queue for offline sync
       _showOfflineOption();
     } finally {
       if (mounted) setState(() => _isAnalyzing = false);
     }
+  }
+
+  void _showInvalidImageDialog(String reason) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.orange.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.image_not_supported_rounded, color: Colors.orange, size: 36),
+        ),
+        title: const Text('Not a Skin Lesion', textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              reason,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.tips_and_updates_rounded, color: AppColors.primary, size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Please capture a clear, close-up photo of your skin lesion or mole.',
+                      style: TextStyle(fontSize: 12, color: AppColors.primary, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showOfflineOption() {
@@ -133,7 +192,8 @@ class _CameraScreenState extends State<CameraScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded, color: AppColors.warning, size: 48),
+            const Icon(Icons.cloud_off_rounded,
+                color: AppColors.warning, size: 48),
             const SizedBox(height: 16),
             const Text(
               'Analysis Offline',
@@ -155,7 +215,8 @@ class _CameraScreenState extends State<CameraScreen>
                 Navigator.pop(context); // back to home
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Photo saved! We\'ll analyze it when you have internet.'),
+                    content: Text(
+                        'Photo saved! We\'ll analyze it when you have internet.'),
                     backgroundColor: AppColors.primary,
                   ),
                 );
@@ -165,12 +226,105 @@ class _CameraScreenState extends State<CameraScreen>
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Try Again Later', style: TextStyle(color: AppColors.textMuted)),
+              child: const Text('Try Again Later',
+                  style: TextStyle(color: AppColors.textMuted)),
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _showGuidelines() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    color: AppColors.primary, size: 28),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('Photo Guidelines', style: AppTextStyles.h2),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const Divider(height: 32),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _buildGuidelineWidgets(context),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildGuidelineWidgets(BuildContext context) {
+    final lines = AppConstants.skinLesionGuidelines.split('\n');
+    List<Widget> widgets = [];
+    
+    final textColor = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black87;
+    
+    for (String line in lines) {
+      if (line.trim().isEmpty) {
+        widgets.add(const SizedBox(height: 8));
+      } else if (line.startsWith('# ')) {
+        // Skip the main title since we have "Photo Guidelines" in the modal header
+        continue; 
+      } else if (line.startsWith('## ')) {
+        // Subheading
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 8),
+          child: Text(
+            line.replaceFirst('## ', ''),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
+          ),
+        ));
+      } else if (line.startsWith('- ')) {
+        // Bullet point
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: 6, left: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('• ', style: TextStyle(fontSize: 16, color: textColor)),
+              Expanded(
+                child: Text(
+                  line.replaceFirst('- ', ''),
+                  style: TextStyle(fontSize: 15, height: 1.5, color: textColor),
+                ),
+              ),
+            ],
+          ),
+        ));
+      } else {
+        // Normal text
+        widgets.add(Text(
+          line,
+          style: TextStyle(fontSize: 15, height: 1.5, color: textColor),
+        ));
+      }
+    }
+    return widgets;
   }
 
   @override
@@ -249,7 +403,7 @@ class _CameraScreenState extends State<CameraScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 44),
+                  _circleBtn(Icons.info_outline_rounded, _showGuidelines),
                 ],
               ),
             ),
@@ -326,12 +480,14 @@ class _CameraScreenState extends State<CameraScreen>
                         margin: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _isInitialized ? AppColors.primary : Colors.grey,
+                          color:
+                              _isInitialized ? AppColors.primary : Colors.grey,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 44), // To keep the capture button centered
+                  const SizedBox(
+                      width: 44), // To keep the capture button centered
                 ],
               ),
             ),

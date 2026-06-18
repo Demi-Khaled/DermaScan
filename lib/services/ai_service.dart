@@ -26,6 +26,11 @@ class AnalysisResult {
   }) : analyzedAt = analyzedAt ?? DateTime.now();
 }
 
+class InvalidImageException implements Exception {
+  final String message;
+  InvalidImageException(this.message);
+}
+
 class AiService {
   Future<AnalysisResult> analyzeLesion(File image, {String? token}) async {
     if (token != null) {
@@ -37,7 +42,7 @@ class AiService {
         request.headers['Authorization'] = 'Bearer $token';
         request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
-        final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
         final response = await http.Response.fromStream(streamedResponse);
 
         if (response.statusCode == 200) {
@@ -50,12 +55,18 @@ class AiService {
             conditionName: data['class_name'],
             imagePath: data['imagePath'],
           );
+        } else if (response.statusCode == 422) {
+          // Backend rejected image as non-lesion
+          final data = jsonDecode(response.body);
+          final detail = data['detail'] as String? ?? 'This does not appear to be a skin lesion image.';
+          throw InvalidImageException(detail);
         } else {
           throw Exception('Failed to analyze lesion: HTTP ${response.statusCode}');
         }
+      } on InvalidImageException {
+        rethrow; // Let callers handle this specifically
       } catch (e) {
-        debugPrint('Cloudinary upload error: $e.');
-        // Throw exception so caller can trigger offline queueing or show error
+        debugPrint('Analysis error: $e');
         throw Exception('Network error or server unavailable');
       }
     }

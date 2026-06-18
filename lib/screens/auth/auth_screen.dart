@@ -221,38 +221,41 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: _isVerifyingOtp
-                ? [
-                    const SizedBox(height: 40),
-                    _buildLogo(),
-                    const SizedBox(height: 48),
-                    _buildOtpForm(),
-                    const SizedBox(height: 40),
-                    _buildFooterLinks(),
-                  ]
-                : [
-                    const SizedBox(height: 20),
-                    _buildLogo(),
-                    const SizedBox(height: 36),
-                    _buildTabBar(),
-                    const SizedBox(height: 28),
-                    FadeTransition(
-                      opacity: _fadeAnim,
-                      child: _tabIndex == 0 ? _buildLoginForm() : _buildSignUpForm(),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildGoogleBtn(),
-                    const SizedBox(height: 28),
-                    _buildDisclaimer(),
-                    const SizedBox(height: 16),
-                    _buildFooterLinks(),
-                  ],
+    return PopScope(
+      canPop: false, // Block back button — there is no safe screen behind auth
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: _isVerifyingOtp
+                  ? [
+                      const SizedBox(height: 40),
+                      _buildLogo(),
+                      const SizedBox(height: 48),
+                      _buildOtpForm(),
+                      const SizedBox(height: 40),
+                      _buildFooterLinks(),
+                    ]
+                  : [
+                      const SizedBox(height: 20),
+                      _buildLogo(),
+                      const SizedBox(height: 36),
+                      _buildTabBar(),
+                      const SizedBox(height: 28),
+                      FadeTransition(
+                        opacity: _fadeAnim,
+                        child: _tabIndex == 0 ? _buildLoginForm() : _buildSignUpForm(),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildGoogleBtn(),
+                      const SizedBox(height: 28),
+                      _buildDisclaimer(),
+                      const SizedBox(height: 16),
+                      _buildFooterLinks(),
+                    ],
+            ),
           ),
         ),
       ),
