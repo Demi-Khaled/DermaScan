@@ -8,54 +8,6 @@ DermaScan is a distributed application consisting of three main tiers: a mobile 
 
 ![System Architecture](assets/images/Gemini_Generated_Image_os9guoos9guoos9g.png)
 
-````mermaid
-flowchart TD
-    %% Define Styles
-    classDef frontend fill:#42A5F5,stroke:#1E88E5,stroke-width:2px,color:#fff
-    classDef backend fill:#66BB6A,stroke:#43A047,stroke-width:2px,color:#fff
-    classDef ml fill:#FFA726,stroke:#FB8C00,stroke-width:2px,color:#fff
-    classDef storage fill:#AB47BC,stroke:#8E24AA,stroke-width:2px,color:#fff
-    classDef external fill:#78909C,stroke:#546E7A,stroke-width:2px,color:#fff
-
-    %% Components
-    MobileApp["📱 Flutter Mobile App"]:::frontend
-    
-    subgraph "Backend Infrastructure (Node.js)"
-        API["⚙️ Express.js REST API\n(Controllers & Routes)"]:::backend
-        Auth["🔐 Auth Middleware\n(JWT / Google Auth)"]:::backend
-    end
-    
-    subgraph "AI Inference Infrastructure (AWS ECS Fargate)"
-        AIService["🧠 Python/Flask AI Service\n(ResNet101 Model)"]:::ml
-    end
-    
-    subgraph "Data Storage"
-        MongoDB[("📊 MongoDB Atlas\n(Users, Lesions, History)")]:::storage
-    end
-    
-    subgraph "External Services"
-        Cloudinary["☁️ Cloudinary\n(Image Storage)"]:::external
-        SMTP["✉️ SMTP Server\n(Email Notifications)"]:::external
-    end
-
-    %% Connections
-    MobileApp <-->|HTTPS / JSON| API
-    MobileApp -->|Image Uploads| API
-    
-    API <-->|Authentication| Auth
-    API <-->|Read/Write Data| MongoDB
-    API -->|Send Emails| SMTP
-    
-    API -->|1. Upload Image| Cloudinary
-    Cloudinary -.->|2. Returns Image URL| API
-    
-    API -->|3. Fetch Image & POST to /predict| AIService
-    AIService -.->|4. Returns Analysis JSON| API
-    
-    API -->|5. Save Result| MongoDB
-    API -.->|6. Return Result to User| MobileApp
-````
-
 ## Component Breakdown
 
 ### 1. Frontend: Flutter Mobile App
