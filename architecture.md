@@ -6,6 +6,8 @@ This document outlines the high-level architecture of the DermaScan application.
 
 DermaScan is a distributed application consisting of three main tiers: a mobile frontend, a centralized backend API, and a specialized AI inference service.
 
+![System Architecture](assets/images/Gemini_Generated_Image_os9guoos9guoos9g.png)
+
 ````mermaid
 flowchart TD
     %% Define Styles
